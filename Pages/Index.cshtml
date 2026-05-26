@@ -1,0 +1,117 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="habit-wrapper">
+    <div class="habit-page-header">
+        <h1>Daily Habit Tracker</h1>
+        <p>Build better habits, one day at a time.</p>
+    </div>
+
+    <div class="add-habit-card">
+        <input id="habitInput" class="habit-input" type="text" placeholder="New habit..." maxlength="100" />
+        <button class="btn-add-habit" onclick="addHabit()">Add Habit</button>
+    </div>
+
+    <div class="habits-list" id="habitsList">
+        <div class="empty-state">Loading...</div>
+    </div>
+
+    <p class="day-label">Day 2 &mdash; 1000 Days Challenge</p>
+</div>
+
+@section Scripts {
+<script>
+    async function loadHabits() {
+        try {
+            const response = await fetch('/api/habits');
+            if (!response.ok) throw new Error('Failed to load');
+            const data = await response.json();
+            renderHabits(data);
+        } catch {
+            document.getElementById('habitsList').innerHTML =
+                '<div class="empty-state">Could not load habits. Try refreshing.</div>';
+        }
+    }
+
+    function renderHabits(habits) {
+        const list = document.getElementById('habitsList');
+
+        if (!habits || habits.length === 0) {
+            list.innerHTML = '<div class="empty-state">No habits yet. Add one above!</div>';
+            return;
+        }
+
+        list.innerHTML = habits.map(h => {
+            const cardClass = h.todayDone ? 'habit-card done' : 'habit-card';
+            const btnClass = h.todayDone ? 'btn-complete done' : 'btn-complete';
+            const btnLabel = h.todayDone ? 'Done' : 'Complete';
+            const streakBadge = (h.todayDone && h.streak >= 1)
+                ? '<span class="streak-badge">&#x2705; Done!</span>'
+                : `<span class="streak-badge">&#x1F525; ${h.streak} days</span>`;
+
+            return `
+                <div class="${cardClass}">
+                    <button class="${btnClass}" onclick="toggleComplete('${h.id}')">${btnLabel}</button>
+                    <div class="habit-info">
+                        <span class="habit-name">${escapeHtml(h.name)}</span>
+                        ${streakBadge}
+                    </div>
+                    <button class="btn-delete" onclick="deleteHabit('${h.id}')" title="Delete">&times;</button>
+                </div>`;
+        }).join('');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    async function addHabit() {
+        const input = document.getElementById('habitInput');
+        const name = input.value.trim();
+        if (!name) return;
+
+        try {
+            const response = await fetch('/api/habits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (response.ok) {
+                input.value = '';
+                await loadHabits();
+            }
+        } catch {
+            alert('Could not add habit. Please try again.');
+        }
+    }
+
+    async function toggleComplete(id) {
+        try {
+            const response = await fetch(`/api/habits/${id}/complete`, { method: 'POST' });
+            if (response.ok) await loadHabits();
+        } catch {
+            await loadHabits();
+        }
+    }
+
+    async function deleteHabit(id) {
+        try {
+            const response = await fetch(`/api/habits/${id}`, { method: 'DELETE' });
+            if (response.ok) await loadHabits();
+        } catch {
+            await loadHabits();
+        }
+    }
+
+    document.getElementById('habitInput').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') addHabit();
+    });
+
+    loadHabits();
+</script>
+}
